@@ -60,6 +60,12 @@ Commit messages: we suggest (but don't require)
 [Conventional Commits](https://www.conventionalcommits.org/) — e.g.
 `feat: add streaming LLM support`, `fix: handle empty tool args`.
 
+## Releasing
+
+The release process — version bumps, CHANGELOG curation, tagging, and
+how the tag-driven publish workflow behaves for stable and prerelease
+versions — is documented in [RELEASING.md](RELEASING.md).
+
 ## Determinism contract
 
 When editing `src/workflow.rs` or `src/state.rs`, keep the determinism
