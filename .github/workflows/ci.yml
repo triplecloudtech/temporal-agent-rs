@@ -94,3 +94,5 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --all-features
+        env:
+          RUSTUP_TOOLCHAIN: "1.95.0"
