@@ -84,7 +84,7 @@ the highest stable version.
 
 `alpha < beta < rc < final`, with numeric identifiers sorted numerically:
 
-```
+```text
 0.2.0-alpha.1 < 0.2.0-beta.1 < 0.2.0-rc.1 < 0.2.0-rc.2 < 0.2.0-rc.10 < 0.2.0
 ```
 
