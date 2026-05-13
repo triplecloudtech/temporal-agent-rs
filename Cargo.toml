@@ -1,0 +1,63 @@
+[package]
+name = "temporal-agent-rs"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT"
+description = "Durable AI agent execution on Temporal using AutoAgents traits."
+repository = "https://github.com/triplecloudtech/temporal-agent-rs"
+homepage = "https://github.com/triplecloudtech/temporal-agent-rs"
+documentation = "https://docs.rs/temporal-agent-rs"
+readme = "README.md"
+keywords = ["temporal", "ai", "agents", "llm", "workflow"]
+categories = ["asynchronous", "api-bindings"]
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+must_use_candidate = "allow"
+doc_markdown = "allow"  # proper nouns (AutoAgents, ReAct, Temporal) generate noise
+
+[dependencies]
+temporalio-sdk = "0.4"
+temporalio-client = "0.4"
+temporalio-sdk-core = "0.4"
+temporalio-common = "0.4"
+temporalio-macros = "0.4"
+
+autoagents = "0.3.7"
+autoagents-core = "0.3.7"
+autoagents-llm = "0.3.7"
+
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "sync"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+async-trait = "0.1"
+thiserror = "1"
+anyhow = "1"
+tracing = "0.1"
+uuid = { version = "1", features = ["v4"] }
+futures-util = "0.3"
+futures = "0.3"
+
+[dev-dependencies]
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+autoagents-derive = "0.3.7"
+autoagents-llm = { version = "0.3.7", features = ["openai", "ollama"] }
+tokio = { version = "1", features = ["full"] }
+testcontainers = { version = "0.26", features = ["http_wait"] }
+url = "2"
+anyhow = "1"
+
+[[example]]
+name = "simple_math_agent"
+path = "examples/simple_math_agent/main.rs"
+
+[[example]]
+name = "interactive_math_agent"
+path = "examples/interactive_math_agent/main.rs"

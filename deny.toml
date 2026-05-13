@@ -1,0 +1,61 @@
+[advisories]
+yanked = "deny"
+unmaintained = "workspace"
+# Advisories in transitive dev-dependencies (testcontainers → astral-tokio-tar).
+# These do NOT ship in the published crate; they only affect the integration
+# test runner. Revisit once testcontainers updates upstream.
+ignore = [
+    "RUSTSEC-2026-0066",
+    "RUSTSEC-2026-0112",
+    "RUSTSEC-2026-0113",
+]
+
+[licenses]
+allow = [
+    "0BSD",
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-DFS-2016",
+    "Unicode-3.0",
+    "Zlib",
+    "MPL-2.0",
+    "CDLA-Permissive-2.0",
+]
+confidence-threshold = 0.8
+
+# temporalio-* 0.4 prerelease crates do not declare a license in their
+# Cargo.toml manifests. The Temporal Rust SDK is Apache-2.0 licensed
+# (see https://github.com/temporalio/sdk-core/blob/master/LICENSE.txt).
+# Remove these exceptions once temporalio crates declare their license.
+[[licenses.clarify]]
+name = "temporalio-client"
+expression = "Apache-2.0"
+license-files = []
+
+[[licenses.clarify]]
+name = "temporalio-common"
+expression = "Apache-2.0"
+license-files = []
+
+[[licenses.clarify]]
+name = "temporalio-macros"
+expression = "Apache-2.0"
+license-files = []
+
+[[licenses.clarify]]
+name = "temporalio-sdk"
+expression = "Apache-2.0"
+license-files = []
+
+[[licenses.clarify]]
+name = "temporalio-sdk-core"
+expression = "Apache-2.0"
+license-files = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

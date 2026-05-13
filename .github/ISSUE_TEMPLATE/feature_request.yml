@@ -1,0 +1,32 @@
+name: Feature request
+description: Propose a new feature or API change
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What can't you do today? Why does it matter?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed API / approach
+      description: Sketch the API or implementation you have in mind. Pseudocode is fine.
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What other approaches did you consider? Why did you discard them?
+
+  - type: textarea
+    id: extras
+    attributes:
+      label: Additional context
+      description: Anything else maintainers should know.

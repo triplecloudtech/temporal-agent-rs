@@ -1,0 +1,73 @@
+name: Bug report
+description: Report a defect in temporal-agent-rs
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please include enough info that a
+        maintainer can reproduce it.
+
+  - type: input
+    id: crate-version
+    attributes:
+      label: temporal-agent-rs version
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: rust-version
+    attributes:
+      label: Rust toolchain
+      description: output of `rustc --version`
+      placeholder: "rustc 1.95.0 (...)"
+    validations:
+      required: true
+
+  - type: input
+    id: temporal-cli-version
+    attributes:
+      label: Temporal CLI / server version
+      description: output of `temporal --version` and `temporal env get`
+      placeholder: "temporal version 1.x.x"
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "macOS 15.3 / Ubuntu 24.04 / ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: Minimal steps and code to reproduce the bug. A failing test is ideal.
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What did you observe? Include logs if relevant.
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / stack traces
+      description: Paste any relevant `RUST_LOG=debug` output, panic backtrace, or Temporal event history.
+      render: text
