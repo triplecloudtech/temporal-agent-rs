@@ -22,6 +22,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
 
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
@@ -66,30 +68,29 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: cargo publish --locked
 
-      - name: Extract CHANGELOG section
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
-          awk -v ver="$version" '
-            BEGIN { hf = "## [" ver "] "; ho = "## [" ver "]" }
-            substr($0, 1, length(hf)) == hf || $0 == ho { capture = 1; next }
-            /^## \[/ { capture = 0 }
-            /^\[[^]]+\]:/ { capture = 0 }
-            capture { print }
-          ' CHANGELOG.md > RELEASE_NOTES.md
-          if [ ! -s RELEASE_NOTES.md ]; then
-            echo "::error::No CHANGELOG section found for ${version} -- add a '## [${version}] - YYYY-MM-DD' heading"
-            exit 1
-          fi
-          echo "Release notes for ${version}:"
-          echo "---"
-          cat RELEASE_NOTES.md
-          echo "---"
+          current="${GITHUB_REF_NAME}"
+          args=("${current}" "--title" "${current}" "--generate-notes")
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
-          body_path: RELEASE_NOTES.md
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          # Find the most recent non-prerelease tag less than the current one.
+          # SemVer prereleases contain '-', e.g. v0.1.0-rc.1.
+          prev=$(git tag --list 'v*' --sort=-v:refname \
+            | grep -v -- '-' \
+            | awk -v cur="${current}" '$0 != cur { print; exit }' \
+            || true)
+          if [ -n "${prev}" ]; then
+            echo "Previous stable tag: ${prev}"
+            args+=("--notes-start-tag" "${prev}")
+          else
+            echo "No previous stable tag — auto-generation will use full history."
+          fi
+
+          if [[ "${current}" == *-* ]]; then
+            args+=("--prerelease")
+          fi
+
+          gh release create "${args[@]}"

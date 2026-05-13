@@ -290,7 +290,8 @@ and PR conventions. By participating you agree to abide by our
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md).
+See the [Releases page](https://github.com/triplecloudtech/temporal-agent-rs/releases)
+for per-version notes auto-generated from merged PRs.
 
 ## Security
 

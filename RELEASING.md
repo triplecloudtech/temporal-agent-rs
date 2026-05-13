@@ -9,9 +9,10 @@ Pushing a tag of the form `v*` to the repo triggers the workflow, which:
 2. Runs `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test --lib`,
    and `cargo doc -D warnings` against the tagged commit.
 3. Runs `cargo publish --dry-run` then `cargo publish`.
-4. Creates a GitHub Release whose body is the matching `## [X.Y.Z]`
-   section of [CHANGELOG.md](CHANGELOG.md). Tags containing a `-`
-   (SemVer prerelease suffix) are marked **Pre-release** automatically.
+4. Creates a GitHub Release whose body is auto-generated from PRs merged
+   since the previous **non-prerelease** tag (or the full repo history
+   if no stable tag exists yet). Tags containing a `-` (SemVer
+   prerelease suffix) are marked **Pre-release** automatically.
 
 ## One-time setup
 
@@ -30,40 +31,41 @@ secret** in GitHub.
 ## Stable release (`vX.Y.Z`)
 
 1. Bump `version` in [Cargo.toml](Cargo.toml).
-2. In [CHANGELOG.md](CHANGELOG.md), move everything under `## [Unreleased]`
-   into a new `## [X.Y.Z] - YYYY-MM-DD` section and update the link
-   footers at the bottom of the file.
-3. Run `cargo build` to refresh `Cargo.lock`.
-4. Commit as `chore(release): X.Y.Z`, open a PR, merge after CI is green.
-5. After merge to `main`:
+2. Run `cargo build` to refresh `Cargo.lock`.
+3. Commit as `chore(release): X.Y.Z`, open a PR, merge after CI is green.
+4. After merge to `main`:
    ```bash
    git checkout main
    git pull
    git tag -a vX.Y.Z -m "vX.Y.Z"
    git push origin vX.Y.Z
    ```
-6. Watch the **Release** workflow in the
+5. Watch the **Release** workflow in the
    [Actions tab](https://github.com/triplecloudtech/temporal-agent-rs/actions).
    On success:
    - The crate appears at <https://crates.io/crates/temporal-agent-rs>.
    - docs.rs builds within ~30 minutes.
    - A GitHub Release at
      `https://github.com/triplecloudtech/temporal-agent-rs/releases/tag/vX.Y.Z`
-     contains the CHANGELOG section.
+     contains auto-generated notes listing PRs merged since the previous
+     stable release.
 
 ## Release candidate (`vX.Y.Z-rc.N`, also `-alpha.N` / `-beta.N`)
 
-The same procedure as a stable release, with these differences:
+Same procedure as a stable release, with these differences:
 
 - **Cargo.toml** must use a valid SemVer prerelease string:
   `version = "0.2.0-rc.1"`. Use lowercase identifiers and a dot before the
   counter — `-rc.1`, not `-rc1` or `-RC.1`.
-- **CHANGELOG.md** gets a dedicated section per RC, e.g.
-  `## [0.2.0-rc.1] - 2026-06-10`. Do not reuse the eventual `## [0.2.0]`
-  heading — each RC needs its own section so the GitHub Release for that
-  RC has meaningful notes.
 - **Tag** uses the same `v` prefix: `git tag -a v0.2.0-rc.1 -m "v0.2.0-rc.1"`.
 - **Iterate** the counter for each candidate: `-rc.1` → `-rc.2` → … → final.
+
+The release workflow finds the "previous tag" for auto-generated notes
+by skipping anything with a `-` suffix. That means an RC's notes cover
+the range from the previous **stable** release through the RC tag —
+not just the delta from the prior RC. If you need narrower per-RC notes,
+edit the generated release body in the GitHub UI after the workflow
+finishes.
 
 ### How consumers see RCs
 
@@ -94,12 +96,7 @@ Once the final RC has soaked:
 
 1. Bump `Cargo.toml` from `0.2.0-rc.3` to `0.2.0` (drop the suffix —
    `0.2.0` is a new version on crates.io, not a rename of any RC).
-2. Add a new `## [0.2.0] - YYYY-MM-DD` section in
-   [CHANGELOG.md](CHANGELOG.md) above the RC sections. Either summarize
-   the RCs ("Includes everything from 0.2.0-rc.1 through 0.2.0-rc.3
-   plus: …") or consolidate the change list. Leave the RC sections in
-   place for traceability.
-3. Tag and push `v0.2.0` as for any stable release.
+2. Tag and push `v0.2.0` as for any stable release.
 
 ## Yanking a release
 
@@ -122,26 +119,21 @@ typos or minor cosmetic issues.
 | Verify-tag step fails | Tag and `Cargo.toml` version disagree | Update one to match, re-tag |
 | `cargo publish --dry-run` fails on metadata | Missing/invalid field in `Cargo.toml` | Fix the field, re-tag with a new patch version |
 | `cargo publish` fails with "already published" | Tag was re-pushed for an already-published version | Bump version, re-tag |
-| CHANGELOG-extract step fails | No `## [X.Y.Z]` section for the tag | Add the section, re-tag (or run `gh release create` manually from the existing tag) |
-| GitHub Release step fails after publish succeeded | Network blip or token scope | Re-run the failed step in the workflow UI, or run `gh release create vX.Y.Z --notes-file RELEASE_NOTES.md` locally |
+| GitHub Release step fails after publish succeeded | Network blip, token scope, or `gh` failure | Re-run the failed step in the workflow UI, or create the release locally with the recovery snippet below |
 
 If you need to recover from a partial release (crate published, GitHub
-Release not created), the easiest fix is to create the GitHub Release
-manually from the existing tag:
+Release not created), create the Release manually from the existing tag:
 
 ```bash
-# Extract the CHANGELOG section the workflow would have used
-version="X.Y.Z"
-awk -v ver="$version" '
-  BEGIN { hf = "## [" ver "] "; ho = "## [" ver "]" }
-  substr($0, 1, length(hf)) == hf || $0 == ho { capture = 1; next }
-  /^## \[/ { capture = 0 }
-  /^\[[^]]+\]:/ { capture = 0 }
-  capture { print }
-' CHANGELOG.md > /tmp/notes.md
-
-gh release create "v${version}" --notes-file /tmp/notes.md
-# Add --prerelease if the version contains a "-" suffix
+tag="vX.Y.Z"
+prev=$(git tag --list 'v*' --sort=-v:refname \
+  | grep -v -- '-' \
+  | awk -v cur="${tag}" '$0 != cur { print; exit }' \
+  || true)
+args=("${tag}" "--title" "${tag}" "--generate-notes")
+[ -n "${prev}" ] && args+=("--notes-start-tag" "${prev}")
+[[ "${tag}" == *-* ]] && args+=("--prerelease")
+gh release create "${args[@]}"
 ```
 
 Re-running the whole workflow won't help — `cargo publish` will fail

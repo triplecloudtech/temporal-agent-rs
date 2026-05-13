@@ -51,10 +51,10 @@ please run `cargo deny check` locally.
 
 1. Fork the repo and create a topic branch off `main`.
 2. Make your change. Keep PRs focused — one logical change per PR.
-3. Update `CHANGELOG.md` under `## [Unreleased]` if your change is
-   user-visible.
-4. Push the branch and open a PR against `main`.
-5. CI must be green before merge.
+3. Push the branch and open a PR against `main`. Release notes are
+   auto-generated from merged PR titles, so make sure the PR title
+   describes the user-visible change.
+4. CI must be green before merge.
 
 Commit messages: we suggest (but don't require)
 [Conventional Commits](https://www.conventionalcommits.org/) — e.g.
@@ -62,9 +62,9 @@ Commit messages: we suggest (but don't require)
 
 ## Releasing
 
-The release process — version bumps, CHANGELOG curation, tagging, and
-how the tag-driven publish workflow behaves for stable and prerelease
-versions — is documented in [RELEASING.md](RELEASING.md).
+The release process — version bumps, tagging, and how the tag-driven
+publish workflow behaves for stable and prerelease versions — is
+documented in [RELEASING.md](RELEASING.md).
 
 ## Determinism contract
 
