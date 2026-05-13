@@ -1,0 +1,95 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  id-token: write
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  release:
+    name: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Verify tag matches Cargo.toml version
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          crate=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
+          if [ "$tag" != "$crate" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match Cargo.toml version (${crate})"
+            exit 1
+          fi
+          echo "Tag ${GITHUB_REF_NAME} matches Cargo.toml version ${crate}"
+
+      - name: cargo fmt --all --check
+        run: cargo fmt --all --check
+
+      - name: cargo clippy
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+
+      - name: cargo test --lib
+        run: cargo test --locked --lib --all-features
+
+      - name: cargo doc
+        run: cargo doc --locked --no-deps --all-features
+        env:
+          RUSTDOCFLAGS: -D warnings
+
+      - name: cargo publish --dry-run
+        run: cargo publish --locked --dry-run
+
+      - name: cargo publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish --locked
+
+      - name: Extract CHANGELOG section
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          awk -v ver="$version" '
+            BEGIN { hf = "## [" ver "] "; ho = "## [" ver "]" }
+            substr($0, 1, length(hf)) == hf || $0 == ho { capture = 1; next }
+            /^## \[/ { capture = 0 }
+            /^\[[^]]+\]:/ { capture = 0 }
+            capture { print }
+          ' CHANGELOG.md > RELEASE_NOTES.md
+          if [ ! -s RELEASE_NOTES.md ]; then
+            echo "::error::No CHANGELOG section found for ${version} -- add a '## [${version}] - YYYY-MM-DD' heading"
+            exit 1
+          fi
+          echo "Release notes for ${version}:"
+          echo "---"
+          cat RELEASE_NOTES.md
+          echo "---"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body_path: RELEASE_NOTES.md
+          prerelease: ${{ contains(github.ref_name, '-') }}
