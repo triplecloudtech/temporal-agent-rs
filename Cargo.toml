@@ -50,7 +50,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 autoagents-derive = "0.3.7"
 autoagents-llm = { version = "0.3.7", features = ["openai", "ollama"] }
 tokio = { version = "1", features = ["full"] }
-testcontainers = { version = "0.26", features = ["http_wait"] }
+testcontainers = { version = "0.27", features = ["http_wait"] }
 url = "2"
 anyhow = "1"
 
