@@ -50,3 +50,13 @@ pub use crate::state::{
 };
 pub use crate::tool::{ToolRegistry, ToolRegistryBuilder};
 pub use crate::workflow::AgentWorkflow;
+
+// Pipeline composition (re-exports from `autoagents_llm`).
+pub use autoagents_llm::pipeline::PipelineBuilder;
+
+// Production primitives: cache and fallback. See `prelude` for the rationale
+// behind intentionally excluding the retry layer.
+pub use autoagents_llm::optim::{
+    CacheConfig, CacheLayer, ChatCacheKeyMode, FallbackConfig, FallbackLayer,
+    default_is_fallbackable,
+};

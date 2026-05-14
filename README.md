@@ -118,13 +118,57 @@ let out: AgentOutput = handle.get_result(WorkflowGetResultOptions::default()).aw
 println!("{}", out.final_answer);
 ```
 
+## Production primitives: caching and fallback
+
+`AgentWorkerBuilder::llm` accepts any `Arc<dyn LLMProvider>`, so you can wrap
+your provider with composable layers from `autoagents_llm` before passing it
+to the worker. The prelude re-exports the relevant types:
+
+```rust,ignore
+use std::sync::Arc;
+use std::time::Duration;
+use temporal_agent_rs::prelude::*;
+
+# fn build(primary: Arc<dyn LLMProvider>, fallback: Arc<dyn LLMProvider>) -> Arc<dyn LLMProvider> {
+let llm: Arc<dyn LLMProvider> = PipelineBuilder::new(primary)
+    .add_layer(CacheLayer::new(CacheConfig {
+        ttl: Some(Duration::from_secs(300)),
+        ..Default::default()
+    }))
+    .add_layer(FallbackLayer::new(vec![fallback]))
+    .build();
+# llm
+# }
+```
+
+**Layer ordering.** The first-added layer is outermost. In the snippet above
+a cache hit short-circuits before any network call; fallback wraps only the
+primary, so it triggers exclusively on a primary error after a cache miss.
+Reorder the `add_layer` calls and the semantics change accordingly.
+
+**Why no retry layer?** `autoagents_llm` also ships a `RetryLayer`, but this
+crate deliberately does not re-export it. Every LLM call already runs inside
+a Temporal activity, and Temporal's activity
+[`RetryPolicy`](https://docs.temporal.io/encyclopedia/retry-policies) owns
+retry. Layering retry inside one activity attempt would hide failures from
+Temporal's history, amplify rate-limit pressure, and not honour workflow
+cancellation. Configure retry on your activity options instead. Fallback is
+kept because it switches providers — orthogonal to retry and not replaceable
+by it.
+
+See `examples/pipelined_math_agent` for a runnable demo (`add` tool +
+`PipelineBuilder(CacheLayer → FallbackLayer)` around two OpenAI models).
+
 ## Running the examples
 
-Two examples ship with the crate:
+Three examples ship with the crate:
 
 - `simple_math_agent` — minimal autonomous loop with a single `add` tool.
 - `interactive_math_agent` — adds an `ask_user` tool so the agent can pause
   for human input on the worker's stdin.
+- `pipelined_math_agent` — same `add` tool, but the provider is wrapped with
+  `PipelineBuilder → CacheLayer → FallbackLayer` to demonstrate the
+  composition pattern described above.
 
 ```bash
 # Terminal 1: local Temporal dev server (install via `brew install temporal` or temporal.io)
@@ -140,6 +184,12 @@ cargo run --example simple_math_agent -- client
 # The worker terminal also accepts typed answers on stdin.
 OPENAI_API_KEY=sk-... cargo run --example interactive_math_agent -- worker
 cargo run --example interactive_math_agent -- client
+
+# Same workflow with a cache+fallback pipeline around two OpenAI models.
+# Override OPENAI_MODEL_PRIMARY / OPENAI_MODEL_FALLBACK to demo fallback;
+# run the client twice with the same prompt to observe the cache layer.
+OPENAI_API_KEY=sk-... cargo run --example pipelined_math_agent -- worker
+cargo run --example pipelined_math_agent -- client
 ```
 
 The Temporal Web UI is at http://localhost:8233. Click into the workflow to
