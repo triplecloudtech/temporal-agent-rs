@@ -105,6 +105,7 @@ impl AgentWorkflow {
                     .get()
                     .cloned()
                     .unwrap_or_default(),
+                output_schema: s.state.input.output_schema.clone(),
             });
 
             let response: LlmResponse = ctx

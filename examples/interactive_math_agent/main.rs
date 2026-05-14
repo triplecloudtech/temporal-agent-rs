@@ -211,6 +211,7 @@ async fn run_client(client: Client) -> anyhow::Result<()> {
         // call `ask_user` rather than fabricate values.
         user_message: "Please add the two numbers I have in mind.".into(),
         max_turns: 8,
+        output_schema: None,
     };
 
     let handle = client

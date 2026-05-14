@@ -48,11 +48,17 @@ impl AgentActivities {
         tracing::debug!(
             messages = input.messages.len(),
             tools = input.tools.len(),
+            schema = input.output_schema.is_some(),
             "llm_chat: invoking LLM"
         );
-        let response = llm::chat(&self.llm, &input.messages, &input.tools)
-            .await
-            .map_err(agent_err_to_activity_err)?;
+        let response = llm::chat(
+            &self.llm,
+            &input.messages,
+            &input.tools,
+            input.output_schema,
+        )
+        .await
+        .map_err(agent_err_to_activity_err)?;
         Ok(response)
     }
 

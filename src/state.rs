@@ -5,6 +5,7 @@
 //! from upstream version churn. Conversions happen at the activity boundary
 //! in [`crate::llm`].
 
+use autoagents_llm::chat::StructuredOutputFormat;
 use serde::{Deserialize, Serialize};
 
 /// Initial input handed to a new `AgentWorkflow` run.
@@ -19,6 +20,12 @@ pub struct AgentInput {
     pub user_message: String,
     /// Hard cap on reasoning turns before the workflow returns.
     pub max_turns: u32,
+    /// Optional JSON Schema constraining the model's final answer. When set,
+    /// the schema is forwarded to the provider on every `llm_chat` activity
+    /// call and recorded in workflow history alongside `messages` and
+    /// `tools`, so replay re-issues byte-identical requests.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_schema: Option<StructuredOutputFormat>,
 }
 
 /// Reason the agent stopped looping.
@@ -182,6 +189,11 @@ pub enum LlmResponse {
 pub struct LlmChatInput {
     pub messages: Vec<Message>,
     pub tools: Vec<ToolSchema>,
+    /// Mirror of [`AgentInput::output_schema`] — copied into every activity
+    /// invocation so the schema lives in event history and replay is
+    /// deterministic.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_schema: Option<StructuredOutputFormat>,
 }
 
 /// Description of a tool sent to the LLM so it knows what it can call.
@@ -237,6 +249,7 @@ pub fn compact(state: &AgentState, keep_recent: usize) -> AgentInput {
         system_prompt: format!("{}{}", state.input.system_prompt, summary),
         user_message: recent_user,
         max_turns: state.input.max_turns,
+        output_schema: state.input.output_schema.clone(),
     }
 }
 
@@ -261,6 +274,7 @@ mod tests {
             system_prompt: "be helpful".into(),
             user_message: "hi".into(),
             max_turns: 5,
+            output_schema: None,
         });
         assert_eq!(s.history.len(), 2);
         assert_eq!(s.history[0].role, Role::System);
@@ -274,6 +288,7 @@ mod tests {
             system_prompt: "sys".into(),
             user_message: "u0".into(),
             max_turns: 50,
+            output_schema: None,
         });
         for i in 1..30 {
             state.history.push(Message::user(format!("u{i}")));
@@ -310,5 +325,81 @@ mod tests {
         let s = serde_json::to_string(&m).unwrap();
         let back: Message = serde_json::from_str(&s).unwrap();
         assert_eq!(m, back);
+    }
+
+    fn sample_schema() -> StructuredOutputFormat {
+        StructuredOutputFormat {
+            name: "weather_report".into(),
+            description: Some("Structured weather observation".into()),
+            schema: Some(serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "city": { "type": "string" },
+                    "temperature_c": { "type": "number" },
+                },
+                "required": ["city", "temperature_c"]
+            })),
+            strict: Some(true),
+        }
+    }
+
+    #[test]
+    fn llm_chat_input_roundtrips_with_schema() {
+        // Stable serde of LlmChatInput is the load-bearing guarantee for
+        // workflow replay determinism: Temporal hashes activity inputs as
+        // JSON, so any drift breaks history matching.
+        let input = LlmChatInput {
+            messages: vec![Message::user("hello")],
+            tools: vec![ToolSchema {
+                name: "noop".into(),
+                description: "does nothing".into(),
+                args_schema: serde_json::json!({"type": "object"}),
+            }],
+            output_schema: Some(sample_schema()),
+        };
+        let s = serde_json::to_string(&input).unwrap();
+        let back: LlmChatInput = serde_json::from_str(&s).unwrap();
+        assert_eq!(back.messages, input.messages);
+        assert_eq!(back.output_schema, input.output_schema);
+    }
+
+    #[test]
+    fn llm_chat_input_omits_absent_schema() {
+        // Backward-compat: an `output_schema: None` must not appear in the
+        // serialized form, so existing recorded inputs deserialize cleanly.
+        let input = LlmChatInput {
+            messages: vec![],
+            tools: vec![],
+            output_schema: None,
+        };
+        let s = serde_json::to_string(&input).unwrap();
+        assert!(!s.contains("output_schema"), "got {s}");
+    }
+
+    #[test]
+    fn agent_input_deserializes_without_schema_field() {
+        // Recorded AgentInput JSON from before this field existed must still
+        // load — guarantees forward compatibility for in-flight workflows
+        // upgraded across this release.
+        let legacy = r#"{"system_prompt":"s","user_message":"u","max_turns":3}"#;
+        let parsed: AgentInput = serde_json::from_str(legacy).unwrap();
+        assert_eq!(parsed.max_turns, 3);
+        assert!(parsed.output_schema.is_none());
+    }
+
+    #[test]
+    fn compact_preserves_output_schema() {
+        let mut state = AgentState::new(AgentInput {
+            system_prompt: "sys".into(),
+            user_message: "u0".into(),
+            max_turns: 50,
+            output_schema: Some(sample_schema()),
+        });
+        for i in 1..30 {
+            state.history.push(Message::user(format!("u{i}")));
+            state.history.push(Message::assistant_text(format!("a{i}")));
+        }
+        let compacted = compact(&state, 10);
+        assert_eq!(compacted.output_schema, state.input.output_schema);
     }
 }
