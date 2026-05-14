@@ -133,6 +133,7 @@ async fn run_client(client: Client) -> anyhow::Result<()> {
                 .into(),
         user_message: "17.5 + 4.2".into(),
         max_turns: 8,
+        output_schema: None,
     };
 
     let handle = client

@@ -53,6 +53,7 @@ tokio = { version = "1", features = ["full"] }
 testcontainers = { version = "0.27", features = ["http_wait"] }
 url = "2"
 anyhow = "1"
+schemars = "1"
 
 [[example]]
 name = "simple_math_agent"
@@ -65,3 +66,7 @@ path = "examples/interactive_math_agent/main.rs"
 [[example]]
 name = "pipelined_math_agent"
 path = "examples/pipelined_math_agent/main.rs"
+
+[[example]]
+name = "structured_output_agent"
+path = "examples/structured_output_agent/main.rs"

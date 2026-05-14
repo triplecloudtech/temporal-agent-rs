@@ -22,6 +22,7 @@ pub use crate::workflow::AgentWorkflow;
 
 pub use autoagents_core::tool::{ToolCallError, ToolRuntime, ToolT};
 pub use autoagents_llm::LLMProvider;
+pub use autoagents_llm::chat::StructuredOutputFormat;
 
 // Pipeline composition (re-exports from `autoagents_llm`).
 pub use autoagents_llm::pipeline::PipelineBuilder;

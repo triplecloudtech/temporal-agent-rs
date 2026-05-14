@@ -8,7 +8,9 @@
 use std::sync::Arc;
 
 use autoagents_llm::LLMProvider;
-use autoagents_llm::chat::{ChatMessage, ChatRole, FunctionTool, MessageType, Tool as LlmTool};
+use autoagents_llm::chat::{
+    ChatMessage, ChatRole, FunctionTool, MessageType, StructuredOutputFormat, Tool as LlmTool,
+};
 use serde_json::Value;
 
 use crate::error::AgentError;
@@ -68,10 +70,15 @@ pub fn to_autoagents_tools(schemas: &[ToolSchema]) -> Vec<LlmTool> {
 /// This is the only async LLM entry point inside the activity. It is invoked
 /// once per agent turn. The model identifier lives on the `LLMProvider`
 /// itself, configured at worker-build time.
+///
+/// `output_schema` (when present) is passed straight through to the provider
+/// as `chat_with_tools`'s `json_schema` argument so the model constrains its
+/// reply to a JSON value matching the schema.
 pub async fn chat(
     llm: &Arc<dyn LLMProvider>,
     messages: &[Message],
     tools: &[ToolSchema],
+    output_schema: Option<StructuredOutputFormat>,
 ) -> Result<LlmResponse, AgentError> {
     let chat_msgs = to_autoagents_messages(messages);
     let llm_tools = to_autoagents_tools(tools);
@@ -79,7 +86,7 @@ pub async fn chat(
     // Pass the tool catalog so OpenAI-style providers can emit native tool
     // calls. Non-tool-aware providers ignore the `tools` argument.
     let response = llm
-        .chat_with_tools(&chat_msgs, Some(&llm_tools), None)
+        .chat_with_tools(&chat_msgs, Some(&llm_tools), output_schema)
         .await
         .map_err(|e| AgentError::Llm(e.to_string()))?;
 

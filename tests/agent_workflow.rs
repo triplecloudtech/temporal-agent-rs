@@ -17,8 +17,10 @@ use async_trait::async_trait;
 use autoagents_core::tool::{ToolCallError, ToolInputT, ToolRuntime};
 use autoagents_derive::{ToolInput, tool};
 use autoagents_llm::LLMProvider;
-use autoagents_llm::backends::ollama::Ollama;
+use autoagents_llm::backends::openai::OpenAI;
 use autoagents_llm::builder::LLMBuilder;
+use autoagents_llm::chat::ReasoningEffort;
+use schemars::{JsonSchema, schema_for};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use temporal_agent_rs::prelude::*;
@@ -31,7 +33,7 @@ use temporalio_sdk_core::{CoreRuntime, RuntimeOptions};
 use url::Url;
 
 /// Default Ollama model. Override via `TEMPORAL_AGENT_TEST_MODEL`.
-const DEFAULT_MODEL: &str = "qwen2.5:0.5b";
+const DEFAULT_MODEL: &str = "qwen3.5:0.8b";
 
 #[derive(Deserialize, ToolInput)]
 struct AddArgs {
@@ -45,6 +47,21 @@ struct AddArgs {
 #[derive(Default, Clone)]
 struct Add;
 
+/// Typed view of the schema-constrained final answer the agent must produce.
+///
+/// `JsonSchema` is derived so the same struct generates the JSON Schema we
+/// hand to the model and the type we deserialize the reply into — schema and
+/// parser stay in sync by construction. `deny_unknown_fields` emits
+/// `additionalProperties: false`, required by OpenAI's strict mode.
+#[derive(Deserialize, JsonSchema)]
+#[schemars(deny_unknown_fields)]
+struct Expression {
+    left_operand: f64,
+    right_operand: f64,
+    result: f64,
+    operation: String,
+}
+
 #[async_trait]
 impl ToolRuntime for Add {
     async fn execute(&self, args: Value) -> Result<Value, ToolCallError> {
@@ -55,6 +72,7 @@ impl ToolRuntime for Add {
 
 #[tokio::test]
 #[ignore = "requires Docker; run with `cargo test --test agent_workflow -- --ignored`"]
+#[allow(clippy::too_many_lines)] // sequential container/worker/driver setup; splitting hurts readability
 async fn agent_workflow_completes_against_ollama() -> anyhow::Result<()> {
     let _ = tracing_subscriber::fmt()
         .with_env_filter(
@@ -82,9 +100,12 @@ async fn agent_workflow_completes_against_ollama() -> anyhow::Result<()> {
     let client = Client::new(connection, client_opts)?;
 
     // Ollama LLM provider.
-    let llm: Arc<dyn LLMProvider> = LLMBuilder::<Ollama>::new()
-        .base_url(ollama_base_url)
+    let llm: Arc<dyn LLMProvider> = LLMBuilder::<OpenAI>::new()
+        .base_url(format!("{ollama_base_url}/v1"))
+        .api_key("dummy")
         .model(model)
+        .reasoning(true)
+        .reasoning_effort(ReasoningEffort::High)
         .build()?;
 
     // Worker.
@@ -109,8 +130,17 @@ async fn agent_workflow_completes_against_ollama() -> anyhow::Result<()> {
             system_prompt: "You are a math assistant. Use the `add` tool to compute sums. \
                             Reply with the result in plain text."
                 .into(),
-            user_message: "What is 17.5 + 4.2?".into(),
+            user_message: "What is 15.4 + 4.5?".into(),
             max_turns: 5,
+            output_schema: Some(StructuredOutputFormat {
+                name: "expression".into(),
+                description: Some("Expression with answer.".into()),
+                schema: Some(
+                    serde_json::to_value(schema_for!(Expression))
+                        .expect("Expression schema serializes"),
+                ),
+                strict: Some(true),
+            }),
         };
 
         let workflow_id = format!("agent-test-{}", uuid::Uuid::new_v4());
@@ -158,9 +188,35 @@ async fn agent_workflow_completes_against_ollama() -> anyhow::Result<()> {
         "should respect max_turns; got {}",
         out.turns_used
     );
+    // Schema-constrained final answer must parse into the typed shape and
+    // carry the exact operands and computed result. Anything else means the
+    // model either ignored the schema or hallucinated the math.
+    let parsed: Expression = serde_json::from_str(&out.final_answer).unwrap_or_else(|e| {
+        panic!(
+            "final_answer should parse as Expression: {e}; got: {}",
+            out.final_answer
+        )
+    });
+    // Tight epsilon — LLM emits JSON literals so values round-trip exactly,
+    // but clippy::float_cmp insists on `abs() < eps` over `==`.
     assert!(
-        out.final_answer.contains("21.7"),
-        "answer should be correct"
+        (parsed.left_operand - 15.4).abs() < f64::EPSILON,
+        "left_operand mismatch: got {}",
+        parsed.left_operand
+    );
+    assert!(
+        (parsed.right_operand - 4.5).abs() < f64::EPSILON,
+        "right_operand mismatch: got {}",
+        parsed.right_operand
+    );
+    assert!(
+        (parsed.result - 19.9).abs() < f64::EPSILON,
+        "result mismatch: got {}",
+        parsed.result
+    );
+    assert!(
+        !parsed.operation.is_empty(),
+        "operation should be set (model produces e.g. \"+\" or \"add\")"
     );
 
     Ok(())
