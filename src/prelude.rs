@@ -22,3 +22,18 @@ pub use crate::workflow::AgentWorkflow;
 
 pub use autoagents_core::tool::{ToolCallError, ToolRuntime, ToolT};
 pub use autoagents_llm::LLMProvider;
+
+// Pipeline composition (re-exports from `autoagents_llm`).
+pub use autoagents_llm::pipeline::PipelineBuilder;
+
+// Production primitives: cache and fallback.
+//
+// Retry is intentionally NOT re-exported. Temporal activity `RetryPolicy`
+// owns retry semantics; layering retry below an activity creates nested
+// retries that are invisible to Temporal history, amplify rate-limit
+// pressure, and don't honour workflow cancellation. Configure retry on
+// your activity options instead.
+pub use autoagents_llm::optim::{
+    CacheConfig, CacheLayer, ChatCacheKeyMode, FallbackConfig, FallbackLayer,
+    default_is_fallbackable,
+};

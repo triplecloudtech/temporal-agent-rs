@@ -32,7 +32,7 @@ temporalio-macros = "0.4"
 
 autoagents = "0.3.7"
 autoagents-core = "0.3.7"
-autoagents-llm = "0.3.7"
+autoagents-llm = { version = "0.3.7", features = ["optim"] }
 
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "sync"] }
 serde = { version = "1", features = ["derive"] }
@@ -61,3 +61,7 @@ path = "examples/simple_math_agent/main.rs"
 [[example]]
 name = "interactive_math_agent"
 path = "examples/interactive_math_agent/main.rs"
+
+[[example]]
+name = "pipelined_math_agent"
+path = "examples/pipelined_math_agent/main.rs"
