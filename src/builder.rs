@@ -20,6 +20,7 @@ use tokio::sync::OnceCell;
 
 use crate::activities::AgentActivities;
 use crate::error::AgentError;
+use crate::memory::{MemoryProvider, SlidingWindowMemory};
 use crate::state::ToolSchema;
 use crate::tool::{ToolRegistry, ToolRegistryBuilder};
 use crate::workflow::AgentWorkflow;
@@ -33,6 +34,12 @@ use crate::workflow::AgentWorkflow;
 /// reads return the same value on every replay).
 pub(crate) static WORKER_TOOL_CATALOG: OnceCell<Vec<ToolSchema>> = OnceCell::const_new();
 
+/// Memory provider made available to the workflow side.
+///
+/// Same replay-safety story as [`WORKER_TOOL_CATALOG`]: set once at worker
+/// start, read deterministically from the workflow body on every replay.
+pub(crate) static WORKER_MEMORY: OnceCell<Arc<dyn MemoryProvider>> = OnceCell::const_new();
+
 /// Fluent builder for an agent-aware Temporal [`Worker`].
 ///
 /// Required calls: [`AgentWorkerBuilder::new`] → [`AgentWorkerBuilder::llm`]
@@ -43,6 +50,7 @@ pub struct AgentWorkerBuilder {
     llm: Option<Arc<dyn LLMProvider>>,
     tools: ToolRegistryBuilder,
     queue: String,
+    memory: Option<Arc<dyn MemoryProvider>>,
 }
 
 impl AgentWorkerBuilder {
@@ -54,6 +62,7 @@ impl AgentWorkerBuilder {
             llm: None,
             tools: ToolRegistry::builder(),
             queue: "agents".to_string(),
+            memory: None,
         }
     }
 
@@ -78,6 +87,15 @@ impl AgentWorkerBuilder {
         self
     }
 
+    /// Override the memory provider. Defaults to
+    /// [`SlidingWindowMemory::default`], which preserves the legacy hardcoded
+    /// compaction behavior.
+    #[must_use]
+    pub fn memory(mut self, memory: Arc<dyn MemoryProvider>) -> Self {
+        self.memory = Some(memory);
+        self
+    }
+
     /// Construct the Temporal worker with `AgentWorkflow` + `AgentActivities`
     /// registered.
     ///
@@ -97,6 +115,11 @@ impl AgentWorkerBuilder {
         // OnceCell::set is fallible if already set; in long-running test
         // processes we tolerate re-initialization with the same data.
         let _ = WORKER_TOOL_CATALOG.set(catalog);
+
+        let memory: Arc<dyn MemoryProvider> = self
+            .memory
+            .unwrap_or_else(|| Arc::new(SlidingWindowMemory::default()));
+        let _ = WORKER_MEMORY.set(memory);
 
         let activities = AgentActivities::new(llm, registry);
 

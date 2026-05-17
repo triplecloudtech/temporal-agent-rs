@@ -13,6 +13,7 @@
 pub use crate::activities::AgentActivities;
 pub use crate::builder::AgentWorkerBuilder;
 pub use crate::error::AgentError;
+pub use crate::memory::{MemoryProvider, SlidingWindowMemory};
 pub use crate::state::{
     AgentInput, AgentOutput, AgentState, LlmResponse, Message, Role, StopReason, ToolCall,
     ToolResult, ToolSchema,

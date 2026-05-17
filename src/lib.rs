@@ -36,6 +36,7 @@ pub mod activities;
 pub mod builder;
 pub mod error;
 pub mod llm;
+pub mod memory;
 pub mod prelude;
 pub mod state;
 pub mod tool;
@@ -44,6 +45,9 @@ pub mod workflow;
 pub use crate::activities::AgentActivities;
 pub use crate::builder::AgentWorkerBuilder;
 pub use crate::error::AgentError;
+pub use crate::memory::{
+    DEFAULT_COMPACT_THRESHOLD, DEFAULT_KEEP_RECENT, MemoryProvider, SlidingWindowMemory,
+};
 pub use crate::state::{
     AgentInput, AgentOutput, AgentState, LlmChatInput, LlmResponse, Message, Role, StopReason,
     ToolCall, ToolResult, ToolSchema,
