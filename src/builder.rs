@@ -16,10 +16,11 @@ use autoagents_llm::LLMProvider;
 use temporalio_client::Client;
 use temporalio_sdk::{Worker, WorkerOptions};
 use temporalio_sdk_core::CoreRuntime;
-use tokio::sync::OnceCell;
+use tokio::sync::{OnceCell, SetError};
 
 use crate::activities::AgentActivities;
 use crate::error::AgentError;
+use crate::memory::{MemoryProvider, SlidingWindowMemory};
 use crate::state::ToolSchema;
 use crate::tool::{ToolRegistry, ToolRegistryBuilder};
 use crate::workflow::AgentWorkflow;
@@ -33,6 +34,12 @@ use crate::workflow::AgentWorkflow;
 /// reads return the same value on every replay).
 pub(crate) static WORKER_TOOL_CATALOG: OnceCell<Vec<ToolSchema>> = OnceCell::const_new();
 
+/// Memory provider made available to the workflow side.
+///
+/// Same replay-safety story as [`WORKER_TOOL_CATALOG`]: set once at worker
+/// start, read deterministically from the workflow body on every replay.
+pub(crate) static WORKER_MEMORY: OnceCell<Arc<dyn MemoryProvider>> = OnceCell::const_new();
+
 /// Fluent builder for an agent-aware Temporal [`Worker`].
 ///
 /// Required calls: [`AgentWorkerBuilder::new`] → [`AgentWorkerBuilder::llm`]
@@ -43,6 +50,7 @@ pub struct AgentWorkerBuilder {
     llm: Option<Arc<dyn LLMProvider>>,
     tools: ToolRegistryBuilder,
     queue: String,
+    memory: Option<Arc<dyn MemoryProvider>>,
 }
 
 impl AgentWorkerBuilder {
@@ -54,6 +62,7 @@ impl AgentWorkerBuilder {
             llm: None,
             tools: ToolRegistry::builder(),
             queue: "agents".to_string(),
+            memory: None,
         }
     }
 
@@ -78,6 +87,15 @@ impl AgentWorkerBuilder {
         self
     }
 
+    /// Override the memory provider. Defaults to
+    /// [`SlidingWindowMemory::default`], which preserves the legacy hardcoded
+    /// compaction behavior.
+    #[must_use]
+    pub fn memory(mut self, memory: Arc<dyn MemoryProvider>) -> Self {
+        self.memory = Some(memory);
+        self
+    }
+
     /// Construct the Temporal worker with `AgentWorkflow` + `AgentActivities`
     /// registered.
     ///
@@ -94,9 +112,61 @@ impl AgentWorkerBuilder {
         // loop register their own `ask_user`-style tool whose `execute()`
         // blocks until an answer is delivered (see the math_agent example).
         let catalog = registry.to_schemas();
-        // OnceCell::set is fallible if already set; in long-running test
-        // processes we tolerate re-initialization with the same data.
-        let _ = WORKER_TOOL_CATALOG.set(catalog);
+        // OnceCell::set is fallible if already set. We tolerate re-init with
+        // the same data (a long-running test process rebuilding workers with
+        // identical config) but fail-fast on mismatch: silently binding a
+        // second worker to the first worker's catalog would break
+        // determinism the moment the second worker's workflows replayed.
+        if let Err(set_err) = WORKER_TOOL_CATALOG.set(catalog) {
+            let rejected = match set_err {
+                SetError::AlreadyInitializedError(v) => v,
+                SetError::InitializingError(_) => {
+                    return Err(AgentError::Other(
+                        "WORKER_TOOL_CATALOG is being initialized concurrently".into(),
+                    ));
+                }
+            };
+            let existing = WORKER_TOOL_CATALOG
+                .get()
+                .expect("AlreadyInitialized so get must succeed");
+            if existing != &rejected {
+                return Err(AgentError::Other(
+                    "WORKER_TOOL_CATALOG was previously initialized with a different tool \
+                     catalog; multiple workers in the same process must register identical \
+                     tools (and in the same order)"
+                        .into(),
+                ));
+            }
+        }
+
+        let memory: Arc<dyn MemoryProvider> = self
+            .memory
+            .unwrap_or_else(|| Arc::new(SlidingWindowMemory::default()));
+        // Same rationale as above. For memory we compare via `Arc::ptr_eq`
+        // because behavioral equality of a `dyn MemoryProvider` cannot be
+        // checked through the trait. Users running multiple workers in one
+        // process must therefore pass a shared `Arc` to every builder.
+        if let Err(set_err) = WORKER_MEMORY.set(memory.clone()) {
+            let rejected = match set_err {
+                SetError::AlreadyInitializedError(v) => v,
+                SetError::InitializingError(_) => {
+                    return Err(AgentError::Other(
+                        "WORKER_MEMORY is being initialized concurrently".into(),
+                    ));
+                }
+            };
+            let existing = WORKER_MEMORY
+                .get()
+                .expect("AlreadyInitialized so get must succeed");
+            if !Arc::ptr_eq(existing, &rejected) {
+                return Err(AgentError::Other(
+                    "WORKER_MEMORY was previously initialized with a different provider \
+                     instance; multiple workers in the same process must share the same \
+                     Arc<dyn MemoryProvider>"
+                        .into(),
+                ));
+            }
+        }
 
         let activities = AgentActivities::new(llm, registry);
 

@@ -197,71 +197,11 @@ pub struct LlmChatInput {
 }
 
 /// Description of a tool sent to the LLM so it knows what it can call.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ToolSchema {
     pub name: String,
     pub description: String,
     pub args_schema: serde_json::Value,
-}
-
-/// Compact long histories so `continue_as_new` doesn't grow the event history
-/// unbounded. Keeps the system prompt, a synthetic summary marker, and the
-/// most recent `keep_recent` messages.
-pub fn compact(state: &AgentState, keep_recent: usize) -> AgentInput {
-    let mut summary_lines = Vec::new();
-    let total = state.history.len();
-    let drop_until = total.saturating_sub(keep_recent);
-
-    for msg in state.history.iter().take(drop_until) {
-        let line = match msg.role {
-            Role::System if summary_lines.is_empty() => continue,
-            Role::User => format!("user: {}", truncate(&msg.content, 200)),
-            Role::Assistant if !msg.tool_calls.is_empty() => {
-                let names: Vec<&str> = msg.tool_calls.iter().map(|c| c.name.as_str()).collect();
-                format!("assistant: called tools [{}]", names.join(", "))
-            }
-            Role::Assistant => format!("assistant: {}", truncate(&msg.content, 200)),
-            Role::Tool => format!("tool: {}", truncate(&msg.content, 120)),
-            Role::System => continue,
-        };
-        summary_lines.push(line);
-    }
-
-    let summary = if summary_lines.is_empty() {
-        String::new()
-    } else {
-        format!(
-            "\n\n[Prior conversation summary, {} messages dropped]\n{}",
-            drop_until,
-            summary_lines.join("\n")
-        )
-    };
-
-    let recent_user = state
-        .history
-        .iter()
-        .rev()
-        .find(|m| m.role == Role::User)
-        .map(|m| m.content.clone())
-        .unwrap_or_default();
-
-    AgentInput {
-        system_prompt: format!("{}{}", state.input.system_prompt, summary),
-        user_message: recent_user,
-        max_turns: state.input.max_turns,
-        output_schema: state.input.output_schema.clone(),
-    }
-}
-
-fn truncate(s: &str, max: usize) -> String {
-    if s.len() <= max {
-        return s.to_string();
-    }
-    let mut boundary = max;
-    while boundary > 0 && !s.is_char_boundary(boundary) {
-        boundary -= 1;
-    }
-    format!("{}…", &s[..boundary])
 }
 
 #[cfg(test)]
@@ -280,39 +220,6 @@ mod tests {
         assert_eq!(s.history[0].role, Role::System);
         assert_eq!(s.history[1].role, Role::User);
         assert_eq!(s.turn, 0);
-    }
-
-    #[test]
-    fn compact_keeps_system_and_recent() {
-        let mut state = AgentState::new(AgentInput {
-            system_prompt: "sys".into(),
-            user_message: "u0".into(),
-            max_turns: 50,
-            output_schema: None,
-        });
-        for i in 1..30 {
-            state.history.push(Message::user(format!("u{i}")));
-            state.history.push(Message::assistant_text(format!("a{i}")));
-        }
-        let compacted = compact(&state, 10);
-        assert!(compacted.system_prompt.starts_with("sys"));
-        assert!(
-            compacted
-                .system_prompt
-                .contains("Prior conversation summary")
-        );
-        assert_eq!(compacted.max_turns, state.input.max_turns);
-    }
-
-    #[test]
-    fn truncate_respects_utf8_char_boundary() {
-        // 'é' is 2 bytes; slicing at byte 2 would split it and panic.
-        let t = truncate("héllo world", 2);
-        assert_eq!(t, "h…");
-        // Already short — returned unchanged.
-        assert_eq!(truncate("hi", 10), "hi");
-        // Emoji boundary (4 bytes for 🦀).
-        assert_eq!(truncate("🦀rust", 2), "…");
     }
 
     #[test]
@@ -385,21 +292,5 @@ mod tests {
         let parsed: AgentInput = serde_json::from_str(legacy).unwrap();
         assert_eq!(parsed.max_turns, 3);
         assert!(parsed.output_schema.is_none());
-    }
-
-    #[test]
-    fn compact_preserves_output_schema() {
-        let mut state = AgentState::new(AgentInput {
-            system_prompt: "sys".into(),
-            user_message: "u0".into(),
-            max_turns: 50,
-            output_schema: Some(sample_schema()),
-        });
-        for i in 1..30 {
-            state.history.push(Message::user(format!("u{i}")));
-            state.history.push(Message::assistant_text(format!("a{i}")));
-        }
-        let compacted = compact(&state, 10);
-        assert_eq!(compacted.output_schema, state.input.output_schema);
     }
 }

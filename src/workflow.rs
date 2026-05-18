@@ -17,6 +17,7 @@
 //! [`ToolT`]: autoagents_core::tool::ToolT
 //! [`LLMProvider`]: autoagents_llm::LLMProvider
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use temporalio_macros::{workflow, workflow_methods};
@@ -26,17 +27,10 @@ use temporalio_sdk::{
 };
 
 use crate::activities::AgentActivities;
+use crate::memory::{MemoryProvider, SlidingWindowMemory};
 use crate::state::{
-    AgentInput, AgentOutput, AgentState, LlmChatInput, LlmResponse, Message, StopReason, compact,
+    AgentInput, AgentOutput, AgentState, LlmChatInput, LlmResponse, Message, StopReason,
 };
-
-/// Hard cap on history length before we `continue_as_new` to keep the event
-/// history small. Picked conservatively; tune via the worker config in a
-/// future release.
-pub const CONTINUE_AS_NEW_THRESHOLD: usize = 200;
-
-/// How many recent messages [`compact`] keeps when rotating to a new run.
-pub const COMPACT_KEEP_RECENT: usize = 20;
 
 /// Durable AI agent workflow.
 ///
@@ -82,8 +76,7 @@ impl AgentWorkflow {
                 }
             });
 
-            let (turn, max_turns, history_len) =
-                ctx.state(|s| (s.state.turn, s.state.input.max_turns, s.state.history.len()));
+            let (turn, max_turns) = ctx.state(|s| (s.state.turn, s.state.input.max_turns));
 
             if turn >= max_turns {
                 let out = ctx.state(|s| {
@@ -92,8 +85,18 @@ impl AgentWorkflow {
                 return Ok(out);
             }
 
-            if history_len > CONTINUE_AS_NEW_THRESHOLD {
-                let next_input = ctx.state(|s| compact(&s.state, COMPACT_KEEP_RECENT));
+            // Resolve the memory provider once per iteration. In production
+            // this is set by `build_worker`; the `unwrap_or_else` fallback
+            // mirrors `WORKER_TOOL_CATALOG` usage below so workflow-only
+            // unit-test paths still work.
+            let memory: Arc<dyn MemoryProvider> = crate::builder::WORKER_MEMORY
+                .get()
+                .cloned()
+                .unwrap_or_else(|| Arc::new(SlidingWindowMemory::default()));
+
+            if ctx.state(|s| memory.should_compact(&s.state)) {
+                let next_input = ctx.state(|s| memory.compact(&s.state));
+                let history_len = ctx.state(|s| s.state.history.len());
                 tracing::info!(history_len, "compacting and continuing as new");
                 ctx.continue_as_new(&next_input, ContinueAsNewOptions::default())?;
                 unreachable!(); // continue_as_new always returns Err
