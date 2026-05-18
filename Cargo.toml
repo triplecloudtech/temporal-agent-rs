@@ -70,3 +70,7 @@ path = "examples/pipelined_math_agent/main.rs"
 [[example]]
 name = "structured_output_agent"
 path = "examples/structured_output_agent/main.rs"
+
+[[example]]
+name = "tunable_memory_agent"
+path = "examples/tunable_memory_agent/main.rs"

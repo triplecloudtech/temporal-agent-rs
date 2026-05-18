@@ -59,6 +59,10 @@ LLM tokens.
 - `AgentWorkerBuilder` for one-line worker setup.
 - Provider-agnostic: bring your own `Arc<dyn LLMProvider>` (OpenAI,
   Anthropic, Ollama, etc. — anything supported by `autoagents_llm`).
+- **Pluggable memory backends** via the `MemoryProvider` trait — default
+  `SlidingWindowMemory` matches the legacy hardcoded behavior; swap in
+  custom strategies through `AgentWorkerBuilder::memory`. See
+  [Pluggable memory backends](#pluggable-memory-backends).
 - **Human-in-the-loop as a regular tool** — the library does not
   special-case any tool name. See
   [Human-in-the-loop tools](#human-in-the-loop-tools).
@@ -159,9 +163,50 @@ by it.
 See `examples/pipelined_math_agent` for a runnable demo (`add` tool +
 `PipelineBuilder(CacheLayer → FallbackLayer)` around two OpenAI models).
 
+## Pluggable memory backends
+
+History compaction is governed by an `Arc<dyn MemoryProvider>` published
+to the worker via `AgentWorkerBuilder::memory`. The default — used when
+`.memory(...)` is not called — is `SlidingWindowMemory` with
+`compact_threshold = 200` and `keep_recent = 20`, which matches the
+legacy hardcoded behavior.
+
+```rust,ignore
+use std::sync::Arc;
+use temporal_agent_rs::prelude::*;
+
+let memory: Arc<dyn MemoryProvider> = Arc::new(
+    SlidingWindowMemory::new()
+        .with_compact_threshold(50)
+        .with_keep_recent(10),
+);
+
+AgentWorkerBuilder::new(client)
+    .llm(llm)
+    .tool(my_tool)
+    .memory(memory)
+    .build_worker(&runtime)?;
+```
+
+**Trait contract.** Implementations MUST be pure and synchronous —
+`should_compact` and `compact` run inside the deterministic workflow
+body and must return identical results on every replay for the same
+`AgentState`. Per-conversation state belongs in `AgentState` (which
+Temporal persists in workflow history), never in fields on the provider.
+
+**Multi-worker setups.** Running multiple workers in the same process on
+the same queue requires sharing the *same* `Arc<dyn MemoryProvider>` —
+the builder fails fast (via `Arc::ptr_eq`) on mismatching instances to
+prevent the second worker from silently inheriting the first worker's
+provider while replay diverges.
+
+See `examples/tunable_memory_agent` for a runnable demo of a tuned
+`SlidingWindowMemory` plus a minimal custom `MemoryProvider` impl
+(`KeepEverythingMemory`) gated behind a `KEEP_EVERYTHING=1` env switch.
+
 ## Running the examples
 
-Three examples ship with the crate:
+Five examples ship with the crate:
 
 - `simple_math_agent` — minimal autonomous loop with a single `add` tool.
 - `interactive_math_agent` — adds an `ask_user` tool so the agent can pause
@@ -169,6 +214,11 @@ Three examples ship with the crate:
 - `pipelined_math_agent` — same `add` tool, but the provider is wrapped with
   `PipelineBuilder → CacheLayer → FallbackLayer` to demonstrate the
   composition pattern described above.
+- `structured_output_agent` — forces a JSON-schema-shaped final answer via
+  `AgentInput::output_schema`.
+- `tunable_memory_agent` — demonstrates a tuned `SlidingWindowMemory` and a
+  custom `MemoryProvider` impl; aggressive thresholds make `continue_as_new`
+  compaction observable on a short conversation.
 
 ```bash
 # Terminal 1: local Temporal dev server (install via `brew install temporal` or temporal.io)
@@ -190,6 +240,17 @@ cargo run --example interactive_math_agent -- client
 # run the client twice with the same prompt to observe the cache layer.
 OPENAI_API_KEY=sk-... cargo run --example pipelined_math_agent -- worker
 cargo run --example pipelined_math_agent -- client
+
+# Structured output — final answer constrained by a JSON schema.
+OPENAI_API_KEY=sk-... cargo run --example structured_output_agent -- worker
+cargo run --example structured_output_agent -- client
+
+# Pluggable memory backends — aggressive SlidingWindowMemory so compaction
+# fires mid-run. Use the `status` sub-command to watch history.len() and the
+# "Prior conversation summary" marker appear in the system prompt.
+OPENAI_API_KEY=sk-... cargo run --example tunable_memory_agent -- worker
+cargo run --example tunable_memory_agent -- client
+cargo run --example tunable_memory_agent -- status
 ```
 
 The Temporal Web UI is at http://localhost:8233. Click into the workflow to
@@ -319,6 +380,10 @@ When you write tools and provider configs:
 - Never call your `LLMProvider` or your `ToolT` from inside workflow code.
   The workflow holds tools by name; the only path to invocation is the
   `execute_tool` activity.
+- `MemoryProvider` impls must be **pure, sync, and stateless** (config
+  only) — `should_compact` and `compact` run inside the workflow body and
+  must return identical results on replay for the same `AgentState`. Keep
+  conversation state in `AgentState`, never on the provider.
 
 ## Version compatibility
 

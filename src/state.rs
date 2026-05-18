@@ -197,7 +197,7 @@ pub struct LlmChatInput {
 }
 
 /// Description of a tool sent to the LLM so it knows what it can call.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ToolSchema {
     pub name: String,
     pub description: String,
