@@ -1,14 +1,6 @@
 [advisories]
 yanked = "deny"
 unmaintained = "workspace"
-# Advisories in transitive dev-dependencies (testcontainers → astral-tokio-tar).
-# These do NOT ship in the published crate; they only affect the integration
-# test runner. Revisit once testcontainers updates upstream.
-ignore = [
-    "RUSTSEC-2026-0066",
-    "RUSTSEC-2026-0112",
-    "RUSTSEC-2026-0113",
-]
 
 [licenses]
 allow = [
