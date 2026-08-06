@@ -412,6 +412,10 @@ for per-version notes auto-generated from merged PRs.
 
 Please report vulnerabilities privately — see [SECURITY.md](SECURITY.md).
 
+## Authors
+
+Built and maintained by [TripleCloud](https://triplecloud.tech).
+
 ## License
 
 MIT
