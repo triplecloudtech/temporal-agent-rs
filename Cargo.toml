@@ -30,7 +30,7 @@ temporalio-sdk-core = "0.4"
 temporalio-common = "0.4"
 temporalio-macros = "0.4"
 
-autoagents = "0.3.7"
+autoagents = "0.4.0"
 autoagents-core = "0.3.7"
 autoagents-llm = { version = "0.3.7", features = ["optim"] }
 
