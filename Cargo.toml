@@ -27,7 +27,7 @@ doc_markdown = "allow"  # proper nouns (AutoAgents, ReAct, Temporal) generate no
 temporalio-sdk = "0.4"
 temporalio-client = "0.4"
 temporalio-sdk-core = "0.4"
-temporalio-common = "0.4"
+temporalio-common = "0.6"
 temporalio-macros = "0.4"
 
 autoagents = "0.3.7"
