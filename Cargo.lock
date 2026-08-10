@@ -108,8 +108,8 @@ dependencies = [
  "async-trait",
  "autoagents-core",
  "autoagents-derive",
- "autoagents-llm",
- "autoagents-protocol",
+ "autoagents-llm 0.3.7",
+ "autoagents-protocol 0.3.7",
 ]
 
 [[package]]
@@ -119,8 +119,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8fa1ac1c801e98323ef3ef8470104f95348e98d976070ba6a0e4c0611a9f367c"
 dependencies = [
  "async-trait",
- "autoagents-llm",
- "autoagents-protocol",
+ "autoagents-llm 0.3.7",
+ "autoagents-protocol 0.3.7",
  "futures",
  "futures-core",
  "futures-util",
@@ -160,7 +160,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4afe50cb2767b514559748c23b60e815a91a24d5422fb01041fcc0b3e1babb97"
 dependencies = [
  "async-trait",
- "autoagents-protocol",
+ "autoagents-protocol 0.3.7",
  "base64",
  "chrono",
  "dirs",
@@ -183,10 +183,52 @@ dependencies = [
 ]
 
 [[package]]
+name = "autoagents-llm"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e9421feb7bac66684517ec394ff3d7b878acf8f18139058f8487cb643660dc9"
+dependencies = [
+ "async-trait",
+ "autoagents-protocol 0.4.0",
+ "base64",
+ "bytes",
+ "chrono",
+ "dirs",
+ "either",
+ "futures",
+ "getrandom 0.4.2",
+ "log",
+ "reqwest",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "strum",
+ "strum_macros",
+ "thiserror",
+ "tokio",
+ "tokio-stream",
+ "ureq",
+ "url",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+]
+
+[[package]]
 name = "autoagents-protocol"
 version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "831a39521bcbb57b41d7a92bd064fd662e55f59ca862340407d878192f480c21"
+dependencies = [
+ "serde",
+ "serde_json",
+ "uuid",
+]
+
+[[package]]
+name = "autoagents-protocol"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5044fadd6bf81652edf547a441a6c0e71dd2ced4822f59ef62c168ee9b657a13"
 dependencies = [
  "serde",
  "serde_json",
@@ -727,7 +769,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -853,7 +895,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1767,7 +1809,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2573,7 +2615,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2632,7 +2674,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2965,7 +3007,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a766e1110788c36f4fa1c2b71b387a7815aa65f88ce0229841826633d93723e"
 dependencies = [
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3106,7 +3148,7 @@ dependencies = [
  "getrandom 0.4.2",
  "once_cell",
  "rustix",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3118,7 +3160,7 @@ dependencies = [
  "autoagents",
  "autoagents-core",
  "autoagents-derive",
- "autoagents-llm",
+ "autoagents-llm 0.4.0",
  "futures",
  "futures-util",
  "schemars 1.2.1",
@@ -4079,7 +4121,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
