@@ -31,7 +31,7 @@ temporalio-common = "0.4"
 temporalio-macros = "0.4"
 
 autoagents = "0.3.7"
-autoagents-core = "0.3.7"
+autoagents-core = "0.4.0"
 autoagents-llm = { version = "0.3.7", features = ["optim"] }
 
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "sync"] }
