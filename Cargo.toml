@@ -28,7 +28,7 @@ temporalio-sdk = "0.4"
 temporalio-client = "0.4"
 temporalio-sdk-core = "0.4"
 temporalio-common = "0.4"
-temporalio-macros = "0.4"
+temporalio-macros = "0.6"
 
 autoagents = "0.3.7"
 autoagents-core = "0.3.7"
